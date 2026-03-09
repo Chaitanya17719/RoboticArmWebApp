@@ -1,31 +1,37 @@
-import { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Modal,
-  TextInput,
-  Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Play, Save, FolderOpen } from 'lucide-react-native';
 import { JointSlider } from '@/components/JointSlider';
+import { gripper as Gripper } from '@/components/gripper';
+import { database, get, ref, set } from '@/lib/firebase';
 import { JointAngles, RobotState } from '@/types/robot';
-import { database, ref, set, get, onValue } from '@/lib/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { FolderOpen, Play, Save } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { onValue } from 'firebase/database';
 
 export default function ControlScreen() {
+
   const router = useRouter();
+
   const [deviceCode, setDeviceCode] = useState<string | null>(null);
+
   const [angles, setAngles] = useState<JointAngles>({
     base: 90,
     shoulder: 90,
     elbow: 90,
     wrist: 90,
     gripper: 90,
+    finger: 90,
   });
 
   const [isRecording, setIsRecording] = useState(false);
@@ -33,39 +39,23 @@ export default function ControlScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [stateName, setStateName] = useState('');
+
   const [savedStates, setSavedStates] = useState<Record<string, RobotState>>(
     {}
   );
+
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  /* ================= DEVICE CONNECTION ================= */
 
   useEffect(() => {
     checkDeviceConnection();
   }, []);
 
-  useEffect(() => {
-    if (deviceCode) {
-      updateLiveAngles();
-    }
-  }, [angles, deviceCode]);
-
-  useEffect(() => {
-    if (isRecording) {
-      const interval = setInterval(() => {
-        setRecordedFrames((prev) => [...prev, { ...angles }]);
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [isRecording, angles]);
-
-  useEffect(() => {
-    if (deviceCode) {
-      loadSavedStates();
-    }
-  }, [deviceCode]);
-
   const checkDeviceConnection = async () => {
     const code = await AsyncStorage.getItem('deviceCode');
+
     if (!code) {
       Alert.alert('No Device', 'Please connect to a device first', [
         {
@@ -78,6 +68,14 @@ export default function ControlScreen() {
     }
   };
 
+  /* ================= SEND ANGLES ================= */
+
+  useEffect(() => {
+    if (deviceCode) {
+      updateLiveAngles();
+    }
+  }, [angles]);
+
   const updateLiveAngles = async () => {
     if (!deviceCode) return;
 
@@ -89,9 +87,53 @@ export default function ControlScreen() {
     }
   };
 
+  /* ================= RECEIVE FEEDBACK ================= */
+
+  useEffect(() => {
+
+    if (!deviceCode) return;
+
+    const feedbackRef = ref(database, `robotArm/feedback/${deviceCode}`);
+
+    const unsubscribe = onValue(feedbackRef, (snapshot) => {
+
+      if (snapshot.exists()) {
+
+        const feedback = snapshot.val();
+
+        setAngles({
+          base: feedback.base ?? 90,
+          shoulder: feedback.shoulder ?? 90,
+          elbow: feedback.elbow ?? 90,
+          wrist: feedback.wrist ?? 90,
+          gripper: feedback.gripper ?? 90,
+          finger: feedback.finger ?? 90,
+        });
+
+      }
+
+    });
+
+    return () => unsubscribe();
+
+  }, [deviceCode]);
+
+  /* ================= SLIDER CHANGE ================= */
+
   const handleAngleChange = (joint: keyof JointAngles, value: number) => {
     setAngles((prev) => ({ ...prev, [joint]: value }));
   };
+
+  /* ================= RECORDING ================= */
+
+  useEffect(() => {
+    if (isRecording) {
+      const interval = setInterval(() => {
+        setRecordedFrames((prev) => [...prev, { ...angles }]);
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [isRecording, angles]);
 
   const startRecording = () => {
     setRecordedFrames([]);
@@ -103,13 +145,17 @@ export default function ControlScreen() {
     setShowCreateModal(true);
   };
 
+  /* ================= SAVE STATE ================= */
+
   const saveState = async () => {
+
     if (!stateName.trim() || !deviceCode) {
       Alert.alert('Error', 'Please enter a state name');
       return;
     }
 
     try {
+
       const stateData: RobotState = {
         name: stateName.trim(),
         timestamp: Date.now(),
@@ -120,23 +166,34 @@ export default function ControlScreen() {
         database,
         `robotArm/states/${deviceCode}/${stateName.trim()}`
       );
+
       await set(stateRef, stateData);
 
       Alert.alert('Success', 'State saved successfully!');
+
       setShowCreateModal(false);
       setStateName('');
       setRecordedFrames([]);
+
       loadSavedStates();
+
     } catch (error) {
+
       Alert.alert('Error', 'Failed to save state');
-      console.error('Error saving state:', error);
+      console.error(error);
+
     }
+
   };
 
+  /* ================= LOAD STATES ================= */
+
   const loadSavedStates = async () => {
+
     if (!deviceCode) return;
 
     try {
+
       const statesRef = ref(database, `robotArm/states/${deviceCode}`);
       const snapshot = await get(statesRef);
 
@@ -145,13 +202,25 @@ export default function ControlScreen() {
       } else {
         setSavedStates({});
       }
+
     } catch (error) {
-      console.error('Error loading states:', error);
+      console.error(error);
     }
+
   };
 
+  useEffect(() => {
+    if (deviceCode) {
+      loadSavedStates();
+    }
+  }, [deviceCode]);
+
+  /* ================= PLAY STATE ================= */
+
   const playState = async (stateKey: string) => {
+
     const state = savedStates[stateKey];
+
     if (!state || !state.frames || state.frames.length === 0) {
       Alert.alert('Error', 'Invalid state data');
       return;
@@ -161,55 +230,79 @@ export default function ControlScreen() {
     setSelectedState(stateKey);
 
     for (const frame of state.frames) {
+
       setAngles(frame);
       await new Promise((resolve) => setTimeout(resolve, 100));
+
     }
 
     setIsPlaying(false);
+
     Alert.alert('Playback Complete', 'State playback finished');
+
   };
+
+  /* ================= UI ================= */
 
   return (
     <SafeAreaView style={styles.container}>
+
       <ScrollView style={styles.scrollView}>
+
         <View style={styles.header}>
           <Text style={styles.title}>Robot Control</Text>
+
           {deviceCode && (
-            <Text style={styles.deviceCode}>Device: {deviceCode}</Text>
+            <Text style={styles.deviceCode}>
+              Device: {deviceCode}
+            </Text>
           )}
         </View>
 
         <View style={styles.slidersContainer}>
+
           <JointSlider
             label="Base"
             value={angles.base}
-            onValueChange={(value) => handleAngleChange('base', value)}
+            onValueChange={(v) => handleAngleChange('base', v)}
             jointType="base"
           />
+
           <JointSlider
             label="Shoulder"
             value={angles.shoulder}
-            onValueChange={(value) => handleAngleChange('shoulder', value)}
+            onValueChange={(v) => handleAngleChange('shoulder', v)}
             jointType="shoulder"
           />
+
           <JointSlider
             label="Elbow"
             value={angles.elbow}
-            onValueChange={(value) => handleAngleChange('elbow', value)}
+            onValueChange={(v) => handleAngleChange('elbow', v)}
             jointType="elbow"
           />
+
           <JointSlider
             label="Wrist"
             value={angles.wrist}
-            onValueChange={(value) => handleAngleChange('wrist', value)}
+            onValueChange={(v) => handleAngleChange('wrist', v)}
             jointType="wrist"
           />
+
           <JointSlider
             label="Gripper"
             value={angles.gripper}
-            onValueChange={(value) => handleAngleChange('gripper', value)}
+            onValueChange={(v) => handleAngleChange('gripper', v)}
             jointType="gripper"
           />
+
+          <Gripper
+            label="Finger"
+            value={angles.finger}
+            onValueChange={(v: number) => handleAngleChange('finger', v)}
+            jointType="finger"
+          />
+
         </View>
 
         <View style={styles.actionsContainer}>
@@ -347,7 +440,7 @@ export default function ControlScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#f0f0f0',
   },
   scrollView: {
     flex: 1,

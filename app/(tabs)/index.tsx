@@ -13,6 +13,7 @@ import { QrCode, Keyboard } from 'lucide-react-native';
 import { QRScanner } from '@/components/QRScanner';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { database, ref, get } from '@/lib/firebase';
 
 export default function LoadDeviceScreen() {
   const router = useRouter();
@@ -21,32 +22,43 @@ export default function LoadDeviceScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const validateAndConnect = async (code: string) => {
-    if (!code || code.trim().length === 0) {
-      setError('Please enter a device code');
+const validateAndConnect = async (code: string) => {
+  if (!code || code.trim().length === 0) {
+    setError('Please enter a device code');
+    return;
+  }
+
+  setLoading(true);
+  setError(null);
+
+  try {
+    const trimmedCode = code.trim();
+
+    // 🔥 CORRECT FIREBASE PATH
+    const deviceRef = ref(database, `robotArm/live/${trimmedCode}`);
+    const snapshot = await get(deviceRef);
+
+    if (!snapshot.exists()) {
+      setError('Invalid device code. Device not found.');
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    await AsyncStorage.setItem('deviceCode', trimmedCode);
 
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      await AsyncStorage.setItem('deviceCode', code.trim());
-
-      Alert.alert('Success', 'Device connected successfully!', [
-        {
-          text: 'OK',
-          onPress: () => router.push('/(tabs)/control'),
-        },
-      ]);
-    } catch (err) {
-      setError('Failed to connect to device. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    Alert.alert('Success', 'Device connected successfully!', [
+      {
+        text: 'OK',
+        onPress: () => router.replace('/(tabs)/control'),
+      },
+    ]);
+  } catch (err) {
+    console.error(err);
+    setError('Failed to connect to device.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleManualEntry = () => {
     validateAndConnect(deviceCode);
