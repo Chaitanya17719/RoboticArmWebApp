@@ -5,7 +5,7 @@ import { JointAngles, RobotState } from '@/types/robot';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { FolderOpen, Play, Save } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   Alert,
   Modal,
@@ -40,6 +40,10 @@ export default function ControlScreen() {
   );
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showPlayModal, setShowPlayModal] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<'custom' | 'infinite' | null>(null);
+  const [repeatCount, setRepeatCount] = useState('');
+  const stopPlaybackRef = useRef(false);
 
   useEffect(() => {
     checkDeviceConnection();
@@ -152,23 +156,51 @@ export default function ControlScreen() {
     }
   };
 
-  const playState = async (stateKey: string) => {
+  const playState = async (
+    stateKey: string,
+    mode: 'custom' | 'infinite',
+    count?: number
+  ) => {
     const state = savedStates[stateKey];
+
     if (!state || !state.frames || state.frames.length === 0) {
       Alert.alert('Error', 'Invalid state data');
       return;
     }
 
-    setIsPlaying(true);
     setSelectedState(stateKey);
 
-    for (const frame of state.frames) {
-      setAngles(frame);
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    stopPlaybackRef.current = false;
+    setIsPlaying(true);
+
+    let loop = 0;
+
+    while (true) {
+
+      for (const frame of state.frames) {
+
+        if (stopPlaybackRef.current) {
+          setIsPlaying(false);
+          return;
+        }
+
+        setAngles(frame);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      loop++;
+
+      if (mode === 'custom' && count && loop >= count) {
+        break;
+      }
     }
 
     setIsPlaying(false);
-    Alert.alert('Playback Complete', 'State playback finished');
+  };
+
+  const stopAction = () => {
+    stopPlaybackRef.current = true;
+    setIsPlaying(false);
   };
 
   return (
@@ -253,6 +285,14 @@ export default function ControlScreen() {
             </Text>
           </View>
         )}
+        {isPlaying && (
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: 'red', margin: 20 }]}
+            onPress={stopAction}
+          >
+            <Text style={styles.actionButtonText}>STOP</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       <Modal
@@ -321,8 +361,9 @@ export default function ControlScreen() {
                       selectedState === key && styles.stateItemSelected,
                     ]}
                     onPress={() => {
+                      setSelectedState(key);
                       setShowLoadModal(false);
-                      playState(key);
+                      setShowPlayModal(true);
                     }}
                   >
                     <View>
@@ -345,6 +386,70 @@ export default function ControlScreen() {
             >
               <Text style={styles.modalCancelText}>Close</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        visible={showPlayModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPlayModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+
+            <Text style={styles.modalTitle}>Playback Mode</Text>
+
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalSaveButton, { marginBottom: 10 }]}
+              onPress={() => {
+                setShowPlayModal(false);
+                if (selectedState) playState(selectedState, 'infinite');
+              }}
+            >
+              <Text style={styles.modalSaveText}>Repeat Till Stop</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalSaveButton, { marginBottom: 10 }]}
+              onPress={() => setRepeatMode('custom')}
+            >
+              <Text style={styles.modalSaveText}>Custom Repeat</Text>
+            </TouchableOpacity>
+
+            {repeatMode === 'custom' && (
+              <>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Enter repeat count"
+                  keyboardType="numeric"
+                  value={repeatCount}
+                  onChangeText={setRepeatCount}
+                />
+
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalSaveButton]}
+                  onPress={() => {
+                    setShowPlayModal(false);
+                    if (selectedState)
+                      playState(selectedState, 'custom', parseInt(repeatCount));
+                  }}
+                >
+                  <Text style={styles.modalSaveText}>Start</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalCancelButton]}
+              onPress={() => {
+                setShowPlayModal(false);
+                setRepeatMode(null);
+              }}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+
           </View>
         </View>
       </Modal>
