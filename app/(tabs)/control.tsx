@@ -76,7 +76,7 @@ export default function ControlScreen() {
       Alert.alert('No Device', 'Please connect to a device first', [
         {
           text: 'OK',
-          onPress: () => router.push('/(tabs)/'),
+          onPress: () => router.push('/(tabs)'),
         },
       ]);
     } else {
