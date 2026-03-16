@@ -70,13 +70,90 @@ export default function ControlScreen() {
     }
   }, [deviceCode]);
 
+  // JOYSTICK CONTROL (WEB ONLY)
+
+  useEffect(() => {
+
+    if (typeof window === "undefined") return;
+
+    let animationFrame;
+
+    const readJoystick = () => {
+
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+
+      if (!gamepads || !gamepads[0]) {
+        animationFrame = requestAnimationFrame(readJoystick);
+        return;
+      }
+
+      const gp = gamepads[0];
+
+      let newAngles = { ...angles };
+
+      // LEFT STICK
+      const baseAxis = gp.axes[0];
+      const shoulderAxis = gp.axes[1];
+
+      // RIGHT STICK
+      const elbowAxis = gp.axes[2];
+      const wristAxis = gp.axes[3];
+
+      // DEADZONE
+      const deadzone = 0.2;
+
+      if (Math.abs(baseAxis) > deadzone) {
+        newAngles.base = Math.min(180, Math.max(0, newAngles.base + baseAxis * 2));
+      }
+
+      if (Math.abs(shoulderAxis) > deadzone) {
+        newAngles.shoulder = Math.min(180, Math.max(0, newAngles.shoulder + shoulderAxis * 2));
+      }
+
+      if (Math.abs(elbowAxis) > deadzone) {
+        newAngles.elbow = Math.min(180, Math.max(0, newAngles.elbow + elbowAxis * 2));
+      }
+
+      if (Math.abs(wristAxis) > deadzone) {
+        newAngles.wrist = Math.min(180, Math.max(0, newAngles.wrist + wristAxis * 2));
+      }
+
+      // BUTTONS
+
+      if (gp.buttons[0]?.pressed) {
+        newAngles.gripper = Math.min(180, newAngles.gripper + 2);
+      }
+
+      if (gp.buttons[1]?.pressed) {
+        newAngles.gripper = Math.max(0, newAngles.gripper - 2);
+      }
+
+      if (gp.buttons[4]?.pressed) {
+        newAngles.finger = Math.min(180, newAngles.finger + 2);
+      }
+
+      if (gp.buttons[5]?.pressed) {
+        newAngles.finger = Math.max(0, newAngles.finger - 2);
+      }
+
+      setAngles(newAngles);
+
+      animationFrame = requestAnimationFrame(readJoystick);
+    };
+
+    readJoystick();
+
+    return () => cancelAnimationFrame(animationFrame);
+
+  }, [angles]);
+
   const checkDeviceConnection = async () => {
     const code = await AsyncStorage.getItem('deviceCode');
     if (!code) {
       Alert.alert('No Device', 'Please connect to a device first', [
         {
           text: 'OK',
-          onPress: () => router.push('/(tabs)'),
+          onPress: () => router.push('/(tabs)/control'),
         },
       ]);
     } else {
