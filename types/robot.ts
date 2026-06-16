@@ -4,7 +4,7 @@ export interface JointAngles {
   elbow: number;
   wrist: number;
   gripper: number;
-  finger: number;   // ✅ NEW
+  finger: number;
 }
 
 export interface RobotState {
@@ -16,6 +16,7 @@ export interface RobotState {
 export interface Device {
   code: string;
   connected: boolean;
+  angles?: JointAngles;
 }
 
 export type JointType = 'base' | 'shoulder' | 'elbow' | 'wrist' | 'gripper' | 'finger';
