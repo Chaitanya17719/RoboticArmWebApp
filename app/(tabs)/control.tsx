@@ -47,11 +47,7 @@ export default function ControlScreen() {
     checkDeviceConnection();
   }, []);
 
-  useFocusEffect(() => {
-    if (deviceCode) {
-      fetchDeviceAngles();
-    }
-  });
+
 
   useEffect(() => {
     if (deviceCode) {
@@ -70,12 +66,14 @@ export default function ControlScreen() {
 
   useEffect(() => {
     if (deviceCode) {
+      fetchDeviceAngles();
       loadSavedStates();
     }
   }, [deviceCode]);
 
   const checkDeviceConnection = async () => {
     const code = await AsyncStorage.getItem('deviceCode');
+
     if (!code) {
       Alert.alert('No Device', 'Please connect to a device first', [
         {
@@ -83,10 +81,10 @@ export default function ControlScreen() {
           onPress: () => router.push('/(tabs)/'),
         },
       ]);
-    } else {
-      setDeviceCode(code);
-      await fetchDeviceAngles();
+      return;
     }
+
+    setDeviceCode(code);
   };
 
   const fetchDeviceAngles = async () => {
@@ -150,11 +148,11 @@ export default function ControlScreen() {
         timestamp: Date.now(),
         frames: recordedFrames,
       };
-      const stateRef = ref(
-          database,
-          `devices/${deviceCode}/states/${stateName.trim()}`
-      );
-      await set(stateRef, stateData);
+    const stateRef = ref(
+      database,
+      `devices/${deviceCode}/states/${stateName.trim()}`
+    );
+          await set(stateRef, stateData);
 
       Alert.alert('Success', 'State saved successfully!');
       setShowCreateModal(false);
