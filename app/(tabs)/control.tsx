@@ -94,7 +94,7 @@ export default function ControlScreen() {
 
     setLoadingAngles(true);
     try {
-      const liveRef = ref(database, `robotArm/live/${deviceCode}`);
+      const liveRef = ref(database, `devices/${deviceCode}/live`);
       const snapshot = await get(liveRef);
 
       if (snapshot.exists()) {
@@ -117,7 +117,7 @@ export default function ControlScreen() {
     if (!deviceCode) return;
 
     try {
-      const liveRef = ref(database, `robotArm/live/${deviceCode}`);
+      const liveRef = ref(database, `devices/${deviceCode}/live`);
       await set(liveRef, angles);
     } catch (error) {
       console.error('Error updating live angles:', error);
@@ -150,10 +150,9 @@ export default function ControlScreen() {
         timestamp: Date.now(),
         frames: recordedFrames,
       };
-
       const stateRef = ref(
-        database,
-        `robotArm/states/${deviceCode}/${stateName.trim()}`
+          database,
+          `devices/${deviceCode}/states/${stateName.trim()}`
       );
       await set(stateRef, stateData);
 
@@ -172,7 +171,7 @@ export default function ControlScreen() {
     if (!deviceCode) return;
 
     try {
-      const statesRef = ref(database, `robotArm/states/${deviceCode}`);
+      const statesRef = ref(database, `devices/${deviceCode}/states`);
       const snapshot = await get(statesRef);
 
       if (snapshot.exists()) {
@@ -216,7 +215,7 @@ export default function ControlScreen() {
       setAngles(lastFrame);
 
       if (deviceCode) {
-        const liveRef = ref(database, `robotArm/live/${deviceCode}`);
+        const liveRef = ref(database, `devices/${deviceCode}/live`);
         await set(liveRef, lastFrame);
       }
 
